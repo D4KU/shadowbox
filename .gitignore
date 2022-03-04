@@ -1,7 +1,10 @@
 **/__pycache__/
+cmake/
 build/
 external/
+.cache/
 .vscode/
 
 **/*.so
-**/.DS_Store
+**/.DS_Storecmake
+compile_commands.json

@@ -4,7 +4,7 @@
 #include <npe.h>
 
 npe_function(shadowbox)
-npe_arg(xtex, dense_double)
+npe_arg(xtex, dense_float)
 npe_arg(ytex, npe_matches(xtex))
 npe_arg(ztex, npe_matches(xtex))
 
@@ -14,40 +14,42 @@ npe_begin_code()
     int ysize = xtex.cols();
     int zsize = xtex.rows();
 
-    if (xsize != ztex.cols() || ysize != ztex.rows() || zsize != ytex.rows())
-    {
-        std::stringstream ss;
-        ss << "Shape error";
-        throw pybind11::value_error(ss.str());
-    }
+    Eigen::Vector3f size(xsize, ysize, zsize);
+    int maxsize = size.maxCoeff();
 
     // construct grid bounding box
-    Eigen::Vector3d min(-.5, -.5, -.5);
-    Eigen::Vector3d max(.5, .5, .5);
-    Eigen::AlignedBox<double, 3> box(min, max);
+    Eigen::Vector3f min(0, 0, 0);
+    Eigen::AlignedBox3f box(min, size / maxsize);
     const int pad = 0;
 
     // construct voxel grid
-    Eigen::MatrixXd grid;
+    Eigen::MatrixXf grid;
     Eigen::RowVector3i gridres;
-    igl::voxel_grid(box, xsize + (pad * 2), pad, grid, gridres);
+    igl::voxel_grid(box, maxsize, pad, grid, gridres);
 
     // get voxel values
-    Eigen::VectorXd S(gridres.prod());
+    Eigen::VectorXf S(gridres.prod());
     for (int x = 0; x < xsize; ++x)
     {
         for (int y = 0; y < ysize; ++y)
         {
             for (int z = 0; z < zsize; ++z)
             {
-                const double val = xtex(z, y) * ytex(z, x) * ztex(y, x);
-                S(x + y * gridres(0) + z * gridres(0) * gridres(1)) = val;
+                // Imagine 2x2x2 cube with these entries:
+                // front: [c d] back: [g h]
+                //        [a b]       [e f]
+                // Then S is laid out like this:
+                // [a b][c d][e f][g h]
+                S(x + y * gridres(0) + z * gridres(0) * gridres(1)) =
+                    xtex(z, y) *
+                    ytex(z, x) *
+                    ztex(y, x);
             }
         }
     }
 
-    const double iso = 0;
-    Eigen::MatrixXd V;
+    const float iso = 0;
+    Eigen::MatrixXf V;
     Eigen::MatrixXi F;
     igl::marching_cubes(S, grid, gridres(0), gridres(1), gridres(2), iso, V, F);
 
