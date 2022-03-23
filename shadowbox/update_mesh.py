@@ -10,8 +10,6 @@ class UpdateMesh(bpy.types.Operator):
     bl_description = ""
     bl_options = {'REGISTER', 'UNDO'}
 
-    _mesh = None
-
     @classmethod
     def poll(cls, context):
         if choose_images.ChooseImages.grid is None:
@@ -20,8 +18,8 @@ class UpdateMesh(bpy.types.Operator):
         return True
 
     @classmethod
-    def _add_geometry(cls, verts, polys):
-        mesh = cls._mesh
+    def _add_geometry(cls, mesh, verts, polys):
+        mesh.clear_geometry()
         mesh.vertices.add(len(verts))
         mesh.vertices.foreach_set('co', verts.ravel())
 
@@ -38,10 +36,10 @@ class UpdateMesh(bpy.types.Operator):
         mesh.update()
 
     def execute(self, context):
-        if UpdateMesh._mesh:
-            UpdateMesh._mesh.clear_geometry()
-        else:
-            UpdateMesh._mesh = bpy.data.meshes.new("shadowbox")
+        try:
+            mesh = bpy.data.meshes["shadowbox"]
+        except KeyError:
+            mesh = bpy.data.meshes.new("shadowbox")
 
         sb = utils.SharedLib('core')
         a, b = sb.create_mesh(
@@ -51,6 +49,6 @@ class UpdateMesh(bpy.types.Operator):
             choose_images.ChooseImages.grid,
             choose_images.ChooseImages.gridres,
         )
-        self._add_geometry(a, b)
+        self._add_geometry(mesh, a, b)
 
         return {'FINISHED'}

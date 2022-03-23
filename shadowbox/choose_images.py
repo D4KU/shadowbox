@@ -41,6 +41,13 @@ class ChooseImages(bpy.types.Operator):
         items=_gather_images,
         default=3,
     )
+    res: bpy.props.FloatProperty(
+        name="Resolution",
+        min=0,
+        max=1,
+        step=2,
+        default=1,
+    )
 
     @classmethod
     def _as_array(cls, name):
@@ -61,7 +68,7 @@ class ChooseImages(bpy.types.Operator):
             return {'CANCELLED'}
 
         sb = utils.SharedLib('core')
-        (ChooseImages.grid, ChooseImages.gridres) = sb.choose_images(x, y, z)
+        (ChooseImages.grid, ChooseImages.gridres) = sb.choose_images(x, y, z, self.res)
         ChooseImages.x = x
         ChooseImages.y = y
         ChooseImages.z = z

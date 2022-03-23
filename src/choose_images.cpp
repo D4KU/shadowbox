@@ -7,6 +7,7 @@ npe_function(choose_images)
 npe_arg(xtex, dense_float)
 npe_arg(ytex, npe_matches(xtex))
 npe_arg(ztex, npe_matches(xtex))
+npe_arg(res, float)
 
 npe_begin_code()
 {
@@ -18,7 +19,7 @@ npe_begin_code()
     // construct voxel grid
     Eigen::MatrixXf grid;
     Eigen::RowVector3i gridres;
-    igl::voxel_grid(box, maxsize, 0, grid, gridres);
+    igl::voxel_grid(box, maxsize * res, 0, grid, gridres);
     return std::make_tuple(npe::move(grid), npe::move(gridres));
 }
 npe_end_code()
