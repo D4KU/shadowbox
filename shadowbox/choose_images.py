@@ -23,8 +23,6 @@ class ChooseImages(bpy.types.Operator):
     x = None
     y = None
     z = None
-    grid = None
-    gridres = None
 
     img_x: bpy.props.EnumProperty(
         name="Image X",
@@ -40,13 +38,6 @@ class ChooseImages(bpy.types.Operator):
         name="Image Z",
         items=_gather_images,
         default=3,
-    )
-    res: bpy.props.FloatProperty(
-        name="Resolution",
-        min=0,
-        max=1,
-        step=2,
-        default=1,
     )
 
     @classmethod
@@ -67,8 +58,6 @@ class ChooseImages(bpy.types.Operator):
            y.shape[1] != x.shape[1]:
             return {'CANCELLED'}
 
-        sb = utils.SharedLib('core')
-        (ChooseImages.grid, ChooseImages.gridres) = sb.choose_images(x, y, z, self.res)
         ChooseImages.x = x
         ChooseImages.y = y
         ChooseImages.z = z

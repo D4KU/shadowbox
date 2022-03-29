@@ -10,9 +10,32 @@ class UpdateMesh(bpy.types.Operator):
     bl_description = ""
     bl_options = {'REGISTER', 'UNDO'}
 
+    img_x: bpy.props.EnumProperty(
+        name="Image X",
+        items=choose_images._gather_images,
+        default=1,
+    )
+    img_y: bpy.props.EnumProperty(
+        name="Image Y",
+        items=choose_images._gather_images,
+        default=2,
+    )
+    img_z: bpy.props.EnumProperty(
+        name="Image Z",
+        items=choose_images._gather_images,
+        default=3,
+    )
+    iso: bpy.props.FloatProperty(
+        name="Iso",
+        min=0,
+        max=1,
+        step=2,
+        default=0,
+    )
+
     @classmethod
     def poll(cls, context):
-        if choose_images.ChooseImages.grid is None:
+        if choose_images.ChooseImages.x is None:
             cls.poll_message_set("No images chosen")
             return False
         return True
@@ -46,9 +69,12 @@ class UpdateMesh(bpy.types.Operator):
             choose_images.ChooseImages.x,
             choose_images.ChooseImages.y,
             choose_images.ChooseImages.z,
-            choose_images.ChooseImages.grid,
-            choose_images.ChooseImages.gridres,
+            self.iso,
         )
         self._add_geometry(mesh, a, b)
+
+        ob = context.object
+        if ob and ob.type == 'MESH':
+            ob.data = mesh
 
         return {'FINISHED'}
