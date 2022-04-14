@@ -32,12 +32,12 @@ class ChooseImages(bpy.types.Operator):
     img_y: bpy.props.EnumProperty(
         name="Image Y",
         items=_gather_images,
-        default=2,
+        default=1,
     )
     img_z: bpy.props.EnumProperty(
         name="Image Z",
         items=_gather_images,
-        default=3,
+        default=1,
     )
 
     @classmethod
@@ -56,7 +56,8 @@ class ChooseImages(bpy.types.Operator):
         if z.shape[0] != y.shape[0] or \
            z.shape[1] != x.shape[0] or \
            y.shape[1] != x.shape[1]:
-            return {'CANCELLED'}
+            self.report({'ERROR'}, "No fitting shape")
+            return {'FINISHED'}
 
         ChooseImages.x = x
         ChooseImages.y = y

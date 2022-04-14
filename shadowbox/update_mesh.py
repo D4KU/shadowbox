@@ -10,27 +10,18 @@ class UpdateMesh(bpy.types.Operator):
     bl_description = ""
     bl_options = {'REGISTER', 'UNDO'}
 
-    img_x: bpy.props.EnumProperty(
-        name="Image X",
-        items=choose_images._gather_images,
-        default=1,
-    )
-    img_y: bpy.props.EnumProperty(
-        name="Image Y",
-        items=choose_images._gather_images,
-        default=2,
-    )
-    img_z: bpy.props.EnumProperty(
-        name="Image Z",
-        items=choose_images._gather_images,
-        default=3,
-    )
     iso: bpy.props.FloatProperty(
         name="Iso",
         min=0,
         max=1,
         step=2,
         default=0,
+    )
+    cores: bpy.props.IntProperty(
+        name="Cores",
+        min=1,
+        max=8,
+        default=2,
     )
 
     @classmethod
@@ -70,6 +61,7 @@ class UpdateMesh(bpy.types.Operator):
             choose_images.ChooseImages.y,
             choose_images.ChooseImages.z,
             self.iso,
+            self.cores,
         )
         self._add_geometry(mesh, a, b)
 
