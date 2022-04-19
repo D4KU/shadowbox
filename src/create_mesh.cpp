@@ -16,11 +16,8 @@ auto create_mesh_impl(
     const Eigen::MatrixXf& ztex,
     const int xstart,
     const int xend,
-    const int pad_left,
-    const int pad_right,
-    const bool left,
-    const bool right,
-    const float cores,
+    const int i,
+    const int cores,
     const float isolvl,
     Eigen::MatrixXf& verts,
     Eigen::MatrixXi& faces)
@@ -29,43 +26,27 @@ auto create_mesh_impl(
     const int yres_tex = xtex.cols();
     const int zres_tex = xtex.rows();
 
-    // construct grid bounding box
-    const Eigen::Vector3f padmin(pad_left, 1, 1);
-    const Eigen::Vector3f padmax(pad_right, 1, 1);
-    Eigen::Vector3f minpt = Eigen::Vector3f(xstart, 0, 0) - (padmin * .5f);
-    Eigen::Vector3f maxpt = Eigen::Vector3f(xend, yres_tex, zres_tex) + (padmax * .5f);
+    const bool first = i == 0;
+    const bool last = i == cores - 1;
+    Eigen::Vector3f minpt(xstart - (first * .5f) + .25f, -.5f, -.5f);
+    Eigen::Vector3f maxpt(xend   + (last  * .5f) - .25f, yres_tex + .5f, zres_tex + .5f);
     const Eigen::Vector3f diff = maxpt - minpt;
+    const int maxsize = std::floor(diff.maxCoeff()) + 1;
 
-    // if (fracf(ratio) < .5f)
+    if (fracf(diff.x()) < .001f)
     {
-        minpt += Eigen::Vector3f(.25f, 0, 0);
-        maxpt -= Eigen::Vector3f(.25f, 0, 0);
-    }
-
-    const float minsize = diff.minCoeff();
-    const float maxsize = diff.maxCoeff();
-
-    const int realmax = std::floor(maxsize) + 1;
-    const int quot = realmax / cores;
-    const float ratio = realmax * minsize / maxsize;
-    const float iratio = round(ratio);
-
-    bool corrected = false;
-    if (iratio - diff.x() != 0.f)
-    {
-        const float rec = 1.f / cores;
-        Eigen::Vector3f offset(.25f, 0, 0);
-        offset *= right - left;
+        const bool left = (i + 1) <= cores * .5f;
+        const bool right = i >= cores * .5f;
+        const Eigen::Vector3f offset((right - left) * .25f, 0, 0);
         minpt += offset;
         maxpt += offset;
-        corrected = true;
     }
 
     // construct voxel grid
     Eigen::MatrixXf grid;
     Eigen::RowVector3i gridres;
     const Eigen::AlignedBox3f box(minpt, maxpt);
-    igl::voxel_grid(box, realmax, 0, grid, gridres);
+    igl::voxel_grid(box, maxsize, 0, grid, gridres);
 
     const int xres_grid = gridres(0);
     const int yres_grid = gridres(1);
@@ -73,17 +54,12 @@ auto create_mesh_impl(
     const int xyres_grid = xres_grid * yres_grid;
 
     Eigen::IOFormat f(4, 0, " ", " ", " ", " ", " ", " ");
-
     std::cout << "row0 " << grid.row(0).format(f) << std::endl;
     std::cout << "xstart/end " << xstart << " " << xend << std::endl;
     std::cout << "minpt " << minpt.format(f) << std::endl;
     std::cout << "maxpt " << maxpt.format(f) << std::endl;
     std::cout << "diff " << diff.format(f) << std::endl;
     std::cout << "gridres   " << xres_grid << "   " << yres_grid << "   " << zres_grid << std::endl;
-    std::cout << "ratio " << ratio << std::endl;
-    std::cout << "quot " << quot << std::endl;
-    std::cout << "l/r " << left << " " << right << std::endl;
-    std::cout << "corrected " << corrected << std::endl;
     std::cout << std::endl;
 
     // set voxel values
@@ -102,7 +78,7 @@ auto create_mesh_impl(
                 //        [a b]       [e f]
                 // Then S is laid out like this:
                 // [a b][c d][e f][g h]
-                vol(x + pad_left + (y + 1) * xres_grid + (z + 1) * xyres_grid)
+                vol(x + first + (y + 1) * xres_grid + (z + 1) * xyres_grid)
                     = xtex(z, y) * ytex(z, x2) * zpx;
             }
         }
@@ -125,29 +101,20 @@ npe_begin_code()
     const int yres = xtex.cols();
     const int zres = xtex.rows();
 
-    // const int cores = 2;
-    const float quart = xres / (float)cores;
+    const float slice = xres / (float)cores;
     int vertoff = 0;
-    const float half = cores * .5f;
 
     Eigen::MatrixXf allverts;
     Eigen::MatrixXi allfaces;
     for (int i = 0; i < cores; ++i)
     {
-        std::cout << "quart " << quart << std::endl;
-        std::cout << "i * quart " << i * quart << std::endl;
-        std::cout << "i+1 * quart " << (i + 1) * quart << std::endl;
-
         Eigen::MatrixXf verts;
         Eigen::MatrixXi faces;
         create_mesh_impl(
             xtex, ytex, ztex,
-            std::floor(i * quart),
-            std::min((int)std::ceil((i + 1) * quart + .0001f), xres),
-            i == 0,
-            i == cores - 1,
-            (i + 1) <= half,
-            i >= half,
+            std::floor(i * slice),
+            std::min((int)std::floor((i + 1) * slice) + 1, xres),
+            i,
             cores,
             iso,
             verts, faces);
@@ -159,8 +126,6 @@ npe_begin_code()
         // 4 2      1,0     1,0     0X1     0,1
         // 5 2.5    1,0     1,0     0,0  X  0,1     0,1
 
-            // std::fmin((i + 1) * quart + 1.f, xres),
-            // std::max((int)(i * quart) - 1, 0),
         // verts and faces are laid out like this:
         // [x, y, z],
         // [x, y, z],
