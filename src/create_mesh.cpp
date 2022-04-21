@@ -1,8 +1,12 @@
 #include <cmath>
+#include <future>
 #include <iostream>
 #include <igl/marching_cubes.h>
 #include <igl/voxel_grid.h>
+#include <mutex>
 #include <npe.h>
+
+std::mutex mutex;
 
 float fracf(float a)
 {
@@ -10,15 +14,15 @@ float fracf(float a)
     return std::modf(a, &intpart);
 }
 
-auto create_mesh_slice(
+void create_mesh_slice(
     const Eigen::MatrixXf& xtex,
     const Eigen::MatrixXf& ytex,
     const Eigen::MatrixXf& ztex,
     const int i,
     const int cores,
     const float isolvl,
-    Eigen::MatrixXf& allverts,
-    Eigen::MatrixXi& allfaces)
+    Eigen::MatrixXf* allverts,
+    Eigen::MatrixXi* allfaces)
 {
     const int xres = ytex.cols();
     const float slice = xres / (float)cores;
@@ -107,14 +111,18 @@ auto create_mesh_slice(
     Eigen::MatrixXi faces;
     igl::marching_cubes(vol, grid, xres_grid, yres_grid, zres_grid, isolvl, verts, faces);
 
-    const int vertoff = allverts.rows();
-    if (vertoff > 0)
-        faces.array() += vertoff;
+    {
+        std::lock_guard<std::mutex> lock(mutex);
 
-    allverts.conservativeResize(allverts.rows() + verts.rows(), 3);
-    allfaces.conservativeResize(allfaces.rows() + faces.rows(), 3);
-    allverts.bottomRows(verts.rows()) = std::move(verts);
-    allfaces.bottomRows(faces.rows()) = std::move(faces);
+        const int vertoff = allverts->rows();
+        if (vertoff > 0)
+            faces.array() += vertoff;
+
+        allverts->conservativeResize(allverts->rows() + verts.rows(), 3);
+        allfaces->conservativeResize(allfaces->rows() + faces.rows(), 3);
+        allverts->bottomRows(verts.rows()) = std::move(verts);
+        allfaces->bottomRows(faces.rows()) = std::move(faces);
+    }
 }
 
 npe_function(create_mesh)
@@ -128,8 +136,13 @@ npe_begin_code()
 {
     Eigen::MatrixXf verts;
     Eigen::MatrixXi faces;
+    auto futures = std::vector<std::future<void>>();
+
     for (int i = 0; i < cores; ++i)
-        create_mesh_slice(xtex, ytex, ztex, i, cores, iso, verts, faces);
+        futures.push_back(std::async(&create_mesh_slice, xtex, ytex, ztex, i, cores, iso, &verts, &faces));
+
+    for (size_t i = 0; i < futures.size(); ++i)
+        futures[i].get();
 
     // std::cout << "----------------------------------" << std::endl;
     return std::make_tuple(npe::move(verts), npe::move(faces));
