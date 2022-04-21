@@ -10,18 +10,21 @@ float fracf(float a)
     return std::modf(a, &intpart);
 }
 
-auto create_mesh_impl(
+auto create_mesh_slice(
     const Eigen::MatrixXf& xtex,
     const Eigen::MatrixXf& ytex,
     const Eigen::MatrixXf& ztex,
-    const int xstart,
-    const int xend,
     const int i,
     const int cores,
     const float isolvl,
-    Eigen::MatrixXf& verts,
-    Eigen::MatrixXi& faces)
+    Eigen::MatrixXf& allverts,
+    Eigen::MatrixXi& allfaces)
 {
+    const int xres = ytex.cols();
+    const float slice = xres / (float)cores;
+    const int xstart = std::floor(i * slice);
+    const int xend = std::min((int)std::floor((i + 1) * slice) + 1, xres);
+
     const int xres_tex = xend - xstart;
     const int yres_tex = xtex.cols();
     const int zres_tex = xtex.rows();
@@ -35,6 +38,17 @@ auto create_mesh_impl(
 
     if (fracf(diff.x()) < .001f)
     {
+        // When left or right is true:
+        // 1,0 ... left is true, right is false
+        //   X ... marks position of i/2
+        //
+        // i  i/2    i==0    i==1    i==2    i==3    i==4
+        // ----------------------------------------------
+        // 2  1      1,0     0X1
+        // 3  1.5    1,0     0,0  X  0,1
+        // 4  2      1,0     1,0     0X1     0,1
+        // 5  2.5    1,0     1,0     0,0  X  0,1     0,1
+
         const bool left = (i + 1) <= cores * .5f;
         const bool right = i >= cores * .5f;
         const Eigen::Vector3f offset((right - left) * .25f, 0, 0);
@@ -53,14 +67,14 @@ auto create_mesh_impl(
     const int zres_grid = gridres(2);
     const int xyres_grid = xres_grid * yres_grid;
 
-    Eigen::IOFormat f(4, 0, " ", " ", " ", " ", " ", " ");
-    std::cout << "row0 " << grid.row(0).format(f) << std::endl;
-    std::cout << "xstart/end " << xstart << " " << xend << std::endl;
-    std::cout << "minpt " << minpt.format(f) << std::endl;
-    std::cout << "maxpt " << maxpt.format(f) << std::endl;
-    std::cout << "diff " << diff.format(f) << std::endl;
-    std::cout << "gridres   " << xres_grid << "   " << yres_grid << "   " << zres_grid << std::endl;
-    std::cout << std::endl;
+    // Eigen::IOFormat f(4, 0, " ", " ", " ", " ", " ", " ");
+    // std::cout << "row0 " << grid.row(0).format(f) << std::endl;
+    // std::cout << "xstart/end " << xstart << " " << xend << std::endl;
+    // std::cout << "minpt " << minpt.format(f) << std::endl;
+    // std::cout << "maxpt " << maxpt.format(f) << std::endl;
+    // std::cout << "diff " << diff.format(f) << std::endl;
+    // std::cout << "gridres   " << xres_grid << "   " << yres_grid << "   " << zres_grid << std::endl;
+    // std::cout << std::endl;
 
     // set voxel values
     Eigen::VectorXf vol(gridres.prod());
@@ -85,7 +99,22 @@ auto create_mesh_impl(
     }
 
     // construct mesh
+    // verts and faces are laid out like this:
+    // [x, y, z],
+    // [x, y, z],
+    // ...
+    Eigen::MatrixXf verts;
+    Eigen::MatrixXi faces;
     igl::marching_cubes(vol, grid, xres_grid, yres_grid, zres_grid, isolvl, verts, faces);
+
+    const int vertoff = allverts.rows();
+    if (vertoff > 0)
+        faces.array() += vertoff;
+
+    allverts.conservativeResize(allverts.rows() + verts.rows(), 3);
+    allfaces.conservativeResize(allfaces.rows() + faces.rows(), 3);
+    allverts.bottomRows(verts.rows()) = std::move(verts);
+    allfaces.bottomRows(faces.rows()) = std::move(faces);
 }
 
 npe_function(create_mesh)
@@ -97,53 +126,12 @@ npe_arg(cores, int)
 
 npe_begin_code()
 {
-    const int xres = ytex.cols();
-    const int yres = xtex.cols();
-    const int zres = xtex.rows();
-
-    const float slice = xres / (float)cores;
-    int vertoff = 0;
-
-    Eigen::MatrixXf allverts;
-    Eigen::MatrixXi allfaces;
+    Eigen::MatrixXf verts;
+    Eigen::MatrixXi faces;
     for (int i = 0; i < cores; ++i)
-    {
-        Eigen::MatrixXf verts;
-        Eigen::MatrixXi faces;
-        create_mesh_impl(
-            xtex, ytex, ztex,
-            std::floor(i * slice),
-            std::min((int)std::floor((i + 1) * slice) + 1, xres),
-            i,
-            cores,
-            iso,
-            verts, faces);
+        create_mesh_slice(xtex, ytex, ztex, i, cores, iso, verts, faces);
 
-        // i i/2    i==0    i==1    i==2    i==3    i==4
-        // ---------------------------------------------
-        // 2 1      1,0     0X1
-        // 3 1.5    1,0     0,0  X  0,1
-        // 4 2      1,0     1,0     0X1     0,1
-        // 5 2.5    1,0     1,0     0,0  X  0,1     0,1
-
-        // verts and faces are laid out like this:
-        // [x, y, z],
-        // [x, y, z],
-        // ...
-
-        if (vertoff > 0)
-            faces.array() += vertoff;
-        vertoff += verts.rows();
-
-        allverts.conservativeResize(allverts.rows() + verts.rows(), 3);
-        allfaces.conservativeResize(allfaces.rows() + faces.rows(), 3);
-        allverts.bottomRows(verts.rows()) = std::move(verts);
-        allfaces.bottomRows(faces.rows()) = std::move(faces);
-
-        // return std::make_tuple(npe::move(verts), npe::move(faces));
-    }
-
-    std::cout << "----------------------------------" << std::endl;
-    return std::make_tuple(npe::move(allverts), npe::move(allfaces));
+    // std::cout << "----------------------------------" << std::endl;
+    return std::make_tuple(npe::move(verts), npe::move(faces));
 }
 npe_end_code()
