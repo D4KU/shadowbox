@@ -1,3 +1,4 @@
+#include <thread>
 #include <cmath>
 #include <future>
 #include <iostream>
@@ -38,7 +39,6 @@ void create_mesh_slice(
     Eigen::Vector3f minpt(xstart - (first * .5f) + .25f, -.5f, -.5f);
     Eigen::Vector3f maxpt(xend   + (last  * .5f) - .25f, yres_tex + .5f, zres_tex + .5f);
     const Eigen::Vector3f diff = maxpt - minpt;
-    const int maxsize = std::floor(diff.maxCoeff()) + 1;
 
     if (fracf(diff.x()) < .001f)
     {
@@ -63,8 +63,10 @@ void create_mesh_slice(
     // construct voxel grid
     Eigen::MatrixXf grid;
     Eigen::RowVector3i gridres;
-    const Eigen::AlignedBox3f box(minpt, maxpt);
-    igl::voxel_grid(box, maxsize, 0, grid, gridres);
+    const int maxsize = diff.maxCoeff();
+    const int div = maxsize - 1;
+    const Eigen::AlignedBox3f box(minpt / div, maxpt / div);
+    igl::voxel_grid(box, maxsize + 1, 0, grid, gridres);
 
     const int xres_grid = gridres(0);
     const int yres_grid = gridres(1);
@@ -130,16 +132,25 @@ npe_arg(xtex, dense_float)
 npe_arg(ytex, npe_matches(xtex))
 npe_arg(ztex, npe_matches(xtex))
 npe_arg(iso, float)
-npe_arg(cores, int)
 
 npe_begin_code()
 {
     Eigen::MatrixXf verts;
     Eigen::MatrixXi faces;
     auto futures = std::vector<std::future<void>>();
+    const int cores = std::max(std::thread::hardware_concurrency(), 1u);
 
     for (int i = 0; i < cores; ++i)
-        futures.push_back(std::async(&create_mesh_slice, xtex, ytex, ztex, i, cores, iso, &verts, &faces));
+        futures.push_back(std::async(
+            &create_mesh_slice,
+            xtex,
+            ytex,
+            ztex,
+            i,
+            cores,
+            iso,
+            &verts,
+            &faces));
 
     for (size_t i = 0; i < futures.size(); ++i)
         futures[i].get();

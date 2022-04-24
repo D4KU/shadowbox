@@ -1,5 +1,6 @@
 import bpy
 import numpy as np
+from functools import partial
 from . import utils
 from . import choose_images
 
@@ -16,12 +17,6 @@ class UpdateMesh(bpy.types.Operator):
         max=1,
         step=2,
         default=0,
-    )
-    cores: bpy.props.IntProperty(
-        name="Cores",
-        min=1,
-        max=8,
-        default=2,
     )
 
     @classmethod
@@ -49,24 +44,35 @@ class UpdateMesh(bpy.types.Operator):
 
         mesh.update()
 
-    def execute(self, context):
-        try:
-            mesh = bpy.data.meshes["shadowbox"]
-        except KeyError:
-            mesh = bpy.data.meshes.new("shadowbox")
+    # def on_depsgraph_update(self, scene, depsgraph):
+    #     self._execute(bpy.context)
 
+    def _execute(self, context):
+        mesh = bpy.data.meshes["shadowbox"]
         sb = utils.SharedLib('core')
         a, b = sb.create_mesh(
             choose_images.ChooseImages.x,
             choose_images.ChooseImages.y,
             choose_images.ChooseImages.z,
             self.iso,
-            self.cores,
         )
         self._add_geometry(mesh, a, b)
+
+    def execute(self, context):
+        try:
+            mesh = bpy.data.meshes["shadowbox"]
+        except KeyError:
+            mesh = bpy.data.meshes.new("shadowbox")
+
+        self._execute(context)
 
         ob = context.object
         if ob and ob.type == 'MESH':
             ob.data = mesh
+
+        # handlers = bpy.app.handlers.depsgraph_update_post
+        # if (handlers.index(self.on_depsgraph_update) < 0):
+        #     func = partial(self.on_depsgraph_update, self)
+        #     handlers.append(func)
 
         return {'FINISHED'}
