@@ -1,6 +1,7 @@
 import bpy
 import numpy as np
 from . import image_handle
+from . import state
 
 
 def _gather_images(cls, context):
@@ -19,64 +20,67 @@ class ChooseImages(bpy.types.Operator):
     bl_label = "Choose Images"
     bl_description = ""
     bl_options = {'REGISTER', 'UNDO'}
+    _handle = None
 
-    x = None
-    y = None
-    z = None
-    img_handle = None
-
-    img_x: bpy.props.EnumProperty(
+    xname: bpy.props.EnumProperty(
         name="Image X",
         items=_gather_images,
         default=2,
     )
-    img_y: bpy.props.EnumProperty(
+    yname: bpy.props.EnumProperty(
         name="Image Y",
         items=_gather_images,
         default=3,
     )
-    img_z: bpy.props.EnumProperty(
+    zname: bpy.props.EnumProperty(
         name="Image Z",
         items=_gather_images,
         default=4,
     )
 
-    @classmethod
-    def _as_array(cls, img):
+    @staticmethod
+    def _as_array(img):
         pxs = np.empty(len(img.pixels), dtype=np.float32)
         img.pixels.foreach_get(pxs)
         pxs = pxs.reshape(img.size[0], img.size[1], -1)
         return pxs[:, :, 0]
 
     @staticmethod
-    def on_depsgraph_update(scene, depsgraph):
-        C = bpy.context
-        if not C.object or not C.object.select_get() or C.mode != 'OBJECT':
-            ChooseImages.img_handle.clear()
-            bpy.app.handlers.depsgraph_update_post.remove(ChooseImages.on_depsgraph_update)
+    def _on_depsgraph_update(scene, depsgraph):
+        ctx = bpy.context
+        if ctx.object and ctx.object.select_get() and ctx.mode == 'OBJECT':
+            return
+
+        ChooseImages._handle.clear()
+        bpy.app.handlers.depsgraph_update_post.remove(
+            ChooseImages._on_depsgraph_update)
 
     def execute(self, context):
-        ximg = bpy.data.images[self.img_x]
-        yimg = bpy.data.images[self.img_y]
-        zimg = bpy.data.images[self.img_z]
+        ximg = bpy.data.images[self.xname]
+        yimg = bpy.data.images[self.yname]
+        zimg = bpy.data.images[self.zname]
 
-        x = self._as_array(ximg)
-        y = self._as_array(yimg)
-        z = self._as_array(zimg)
-
-        if z.shape[0] != y.shape[0] or \
-           z.shape[1] != x.shape[0] or \
-           y.shape[1] != x.shape[1]:
+        if zimg.size[0] != yimg.size[0] or \
+           zimg.size[1] != ximg.size[0] or \
+           yimg.size[1] != ximg.size[1]:
             self.report({'ERROR'}, "No fitting shape")
             return {'FINISHED'}
 
-        if not self.img_handle:
-            ChooseImages.img_handle = image_handle.ImageHandle()
+        xarr = self._as_array(ximg)
+        yarr = self._as_array(yimg)
+        zarr = self._as_array(zimg)
 
-        self.img_handle.set_images(ximg, yimg, zimg)
-        ChooseImages.x = x
-        ChooseImages.y = y
-        ChooseImages.z = z
+        if not self._handle:
+            ChooseImages._handle = image_handle.ImageHandle()
 
-        bpy.app.handlers.depsgraph_update_post.append(ChooseImages.on_depsgraph_update)
+        self._handle.set_images(ximg, yimg, zimg)
+        state.img_x = ximg
+        state.img_y = yimg
+        state.img_z = zimg
+        state.arr_x = xarr
+        state.arr_y = yarr
+        state.arr_z = zarr
+
+        bpy.app.handlers.depsgraph_update_post.append(
+            self._on_depsgraph_update)
         return {'FINISHED'}
