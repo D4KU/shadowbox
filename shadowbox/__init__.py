@@ -14,16 +14,13 @@ if not any(mpath in v for v in sys.path):
 if 'bpy' in locals():
     import importlib
     importlib.reload(choose_images)
-    importlib.reload(update_mesh)
 else:
     import bpy
     from . import choose_images
-    from . import update_mesh
 
 
 classes = (
     choose_images.ChooseImages,
-    update_mesh.UpdateMesh,
 )
 
 
