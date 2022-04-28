@@ -2,6 +2,8 @@ import bpy
 import numpy as np
 from . import utils
 from . import image_handle
+import core
+# sb = utils.SharedLib('core')
 
 
 def _gather_images(cls, context):
@@ -20,8 +22,13 @@ class ChooseImages(bpy.types.Operator):
     bl_label = "Shadowbox"
     bl_description = ""
     bl_options = {'REGISTER', 'UNDO'}
+    _MESH_NAME = "shadowbox"
     _handle = None
-    _mesh_name = "shadowbox"
+    _runs_modal = False
+    _mesh = None
+    _ximg = None
+    _yimg = None
+    _zimg = None
 
     xname: bpy.props.EnumProperty(
         name="Image X",
@@ -44,6 +51,10 @@ class ChooseImages(bpy.types.Operator):
         max=1,
         step=2,
         default=0,
+    )
+    run_modal: bpy.props.BoolProperty(
+        name="Modal",
+        default=False,
     )
 
     @staticmethod
@@ -81,7 +92,7 @@ class ChooseImages(bpy.types.Operator):
         bpy.app.handlers.depsgraph_update_post.remove(
             ChooseImages._on_depsgraph_update)
 
-    def execute(self, context):
+    def _init(self, context):
         ximg = bpy.data.images[self.xname]
         yimg = bpy.data.images[self.yname]
         zimg = bpy.data.images[self.zname]
@@ -90,30 +101,57 @@ class ChooseImages(bpy.types.Operator):
            zimg.size[1] != ximg.size[0] or \
            yimg.size[1] != ximg.size[1]:
             self.report({'ERROR'}, "No fitting shape")
-            return {'FINISHED'}
+            return False
+
+        ChooseImages._ximg = ximg
+        ChooseImages._yimg = yimg
+        ChooseImages._zimg = zimg
 
         if not self._handle:
             ChooseImages._handle = image_handle.ImageHandle()
         self._handle.set_images(ximg, yimg, zimg)
 
-        try:
-            mesh = bpy.data.meshes[self._mesh_name]
-        except KeyError:
-            mesh = bpy.data.meshes.new(self._mesh_name)
-
-        sb = utils.SharedLib('core')
-        geo = sb.create_mesh(
-            self._as_array(ximg),
-            self._as_array(yimg),
-            self._as_array(zimg),
-            self.iso,
-        )
-        self._set_geometry(mesh, *geo)
+        if not self._mesh:
+            try:
+                ChooseImages._mesh = bpy.data.meshes[self._MESH_NAME]
+            except KeyError:
+                ChooseImages._mesh = bpy.data.meshes.new(self._MESH_NAME)
 
         ob = context.object
         if ob and ob.type == 'MESH':
-            ob.data = mesh
+            ob.data = self._mesh
 
-        bpy.app.handlers.depsgraph_update_post.append(
-            self._on_depsgraph_update)
+        handler = bpy.app.handlers.depsgraph_update_post
+        if self._on_depsgraph_update not in handler:
+            handler.append(self._on_depsgraph_update)
+
+        return True
+
+    def _execute(self, context):
+        geo = core.create_mesh(
+            self._as_array(self._ximg),
+            self._as_array(self._yimg),
+            self._as_array(self._zimg),
+            self.iso,
+        )
+        self._set_geometry(self._mesh, *geo)
+
+    def execute(self, context):
+        if self._init(context):
+            self._execute(context)
         return {'FINISHED'}
+
+    def modal(self, context, event):
+        if event.type == 'ESC':
+            ChooseImages._runs_modal = False
+            return {'FINISHED'}
+        self._execute(context)
+        return {'PASS_THROUGH'}
+
+    def invoke(self, context, event):
+        if self.run_modal and not self._runs_modal and self._init(context):
+            ChooseImages._runs_modal = True
+            context.window_manager.modal_handler_add(self)
+            return {'RUNNING_MODAL'}
+        else:
+            return {'FINISHED'}
