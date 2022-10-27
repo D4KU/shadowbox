@@ -58,6 +58,14 @@ class ChooseImages(bpy.types.Operator):
     )
 
     @staticmethod
+    def debug_log(arr):
+        np.set_printoptions(threshold=sys.maxsize)
+        string = np.array2string(arr)
+        f = open("D://a.txt", "w")
+        f.write(string)
+        f.close()
+
+    @staticmethod
     def _as_array(img):
         pxs = np.empty(len(img.pixels), dtype=np.float32)
         img.pixels.foreach_get(pxs)
@@ -127,6 +135,11 @@ class ChooseImages(bpy.types.Operator):
 
         return True
 
+    def execute(self, context):
+        if self._init(context):
+            self._execute(context)
+        return {'FINISHED'}
+
     def _execute(self, context):
         geo = core.create_mesh(
             self._as_array(self._ximg),
@@ -136,11 +149,6 @@ class ChooseImages(bpy.types.Operator):
         )
         self._set_geometry(self._mesh, *geo)
 
-    def execute(self, context):
-        if self._init(context):
-            self._execute(context)
-        return {'FINISHED'}
-
     def modal(self, context, event):
         if event.type == 'ESC':
             ChooseImages._runs_modal = False
@@ -149,9 +157,13 @@ class ChooseImages(bpy.types.Operator):
         return {'PASS_THROUGH'}
 
     def invoke(self, context, event):
-        if self.run_modal and not self._runs_modal and self._init(context):
-            ChooseImages._runs_modal = True
-            context.window_manager.modal_handler_add(self)
+        print("invoke")
+        if self.run_modal:
+            if not self._runs_modal:
+                if not self._init(context):
+                    return {'FINISHED'}
+                ChooseImages._runs_modal = True
+                context.window_manager.modal_handler_add(self)
             return {'RUNNING_MODAL'}
-        else:
-            return {'FINISHED'}
+
+        return self.execute(context)

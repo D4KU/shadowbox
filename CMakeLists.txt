@@ -16,6 +16,9 @@ set(NPE_PYTHON_VERSION 3.9)
 set(EXTERNAL_DEP_DIR ${CMAKE_CURRENT_SOURCE_DIR}/external)  # Directory for external modules
 set(CMAKE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/cmake)  # Directory for cmake scripts
 
+# Default to shared libs
+# option(BUILD_SHARED_LIBS "Build shared libraries" ON)
+
 # Download NumpyEigen if we haven't already
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 include(DownloadProject)
@@ -50,7 +53,6 @@ add_subdirectory(${EXTERNAL_DEP_DIR}/libigl)
 # The files specified after BINDING_SOURCES are the source files containing numpyeigen bindings
 npe_add_module(core
   BINDING_SOURCES
-  ${CMAKE_CURRENT_SOURCE_DIR}/src/choose_images.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/src/create_mesh.cpp
 )
 

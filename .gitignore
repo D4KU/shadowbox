@@ -4,6 +4,7 @@ build/
 external/
 .cache/
 .vscode/
+.vs/
 
 **/*.so
 **/.DS_Storecmake
