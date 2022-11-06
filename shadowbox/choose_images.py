@@ -50,7 +50,7 @@ class ChooseImages(bpy.types.Operator):
         min=0,
         max=1,
         step=2,
-        default=0,
+        default=0.5,
     )
     run_modal: bpy.props.BoolProperty(
         name="Modal",
@@ -119,11 +119,10 @@ class ChooseImages(bpy.types.Operator):
             ChooseImages._handle = image_handle.ImageHandle()
         self._handle.set_images(ximg, yimg, zimg)
 
-        if not self._mesh:
-            try:
-                ChooseImages._mesh = bpy.data.meshes[self._MESH_NAME]
-            except KeyError:
-                ChooseImages._mesh = bpy.data.meshes.new(self._MESH_NAME)
+        try:
+            ChooseImages._mesh = bpy.data.meshes[self._MESH_NAME]
+        except KeyError:
+            ChooseImages._mesh = bpy.data.meshes.new(self._MESH_NAME)
 
         ob = context.object
         if ob and ob.type == 'MESH':
@@ -165,5 +164,4 @@ class ChooseImages(bpy.types.Operator):
                 ChooseImages._runs_modal = True
                 context.window_manager.modal_handler_add(self)
             return {'RUNNING_MODAL'}
-
         return self.execute(context)
