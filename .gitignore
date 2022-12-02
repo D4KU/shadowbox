@@ -1,7 +1,8 @@
 **/__pycache__/
 cmake/
-build/
+*build/
 external/
+shadowbox/
 .cache/
 .vscode/
 .vs/
@@ -9,3 +10,4 @@ external/
 **/*.so
 **/.DS_Storecmake
 compile_commands.json
+tmp.cc

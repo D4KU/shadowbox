@@ -52,6 +52,13 @@ class ChooseImages(bpy.types.Operator):
         step=2,
         default=0.5,
     )
+    adaptivity: bpy.props.FloatProperty(
+        name="Adaptivity",
+        min=0,
+        max=1,
+        step=2,
+        default=1,
+    )
     run_modal: bpy.props.BoolProperty(
         name="Modal",
         default=False,
@@ -145,6 +152,7 @@ class ChooseImages(bpy.types.Operator):
             self._as_array(self._yimg),
             self._as_array(self._zimg),
             self.iso,
+            self.adaptivity,
         )
         self._set_geometry(self._mesh, *geo)
 
