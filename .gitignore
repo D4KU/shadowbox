@@ -2,12 +2,11 @@
 cmake/
 *build/
 external/
-shadowbox/
 .cache/
 .vscode/
 .vs/
 
+**/*.pyd
 **/*.so
 **/.DS_Storecmake
 compile_commands.json
-tmp.cc

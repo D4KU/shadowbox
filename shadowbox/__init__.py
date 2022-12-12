@@ -13,14 +13,14 @@ if not any(mpath in v for v in sys.path):
 
 if 'bpy' in locals():
     import importlib
-    importlib.reload(choose_images)
+    importlib.reload(operator)
 else:
     import bpy
-    from . import choose_images
+    from . import operator
 
 
 classes = (
-    choose_images.ChooseImages,
+    operator.Shadowbox,
 )
 
 

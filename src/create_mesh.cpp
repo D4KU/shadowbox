@@ -1,10 +1,18 @@
-#include <thread>
-#include <future>
 #include <cmath>
+#include <future>
 #include <iostream>
+#include <thread>
+#include <tuple>
 #include <vector>
 
-#include <npe.h>
+#include <Eigen/Dense>
+
+#include <pybind11/pybind11.h>
+#include <pybind11/numpy.h>
+#include <pybind11/stl.h>
+#include <pybind11/eigen.h>
+#include <Python.h>
+
 #include <openvdb/openvdb.h>
 #include <openvdb/Grid.h>
 #include <openvdb/Types.h>
@@ -45,14 +53,12 @@ vdb::BoolGrid::Ptr get_vol_slice(
     return grid;
 }
 
-npe_function(create_mesh)
-npe_arg(xtex, dense_float)
-npe_arg(ytex, dense_float)
-npe_arg(ztex, dense_float)
-npe_arg(iso, float)
-npe_arg(adaptivity, float)
-
-npe_begin_code()
+std::pair<Eigen::MatrixX3f, Eigen::MatrixX4i> create_mesh(
+    const Eigen::Ref<const Eigen::MatrixXf>& xtex,
+    const Eigen::Ref<const Eigen::MatrixXf>& ytex,
+    const Eigen::Ref<const Eigen::MatrixXf>& ztex,
+    const float iso,
+    const float adaptivity)
 {
     vdb::initialize();
     std::vector<vdb::Vec3s> points;
@@ -69,6 +75,7 @@ npe_begin_code()
     for (int i = 1; i < cores; ++i)
         grid->merge(*futures[i].get());
 
+    grid->tree().prune();
     vdb::tools::volumeToMesh(*grid, points, tris, quads, .5, adaptivity);
     Eigen::MatrixX3f verts(points.size(), 3);
     Eigen::MatrixX4i faces(tris.size() + quads.size(), 4);
@@ -102,6 +109,17 @@ npe_begin_code()
         faces(j, 3) = tris[i][2];
     }
 
-    return std::make_tuple(npe::move(verts), npe::move(faces));
+    return std::make_pair(std::move(verts), std::move(faces));
 }
-npe_end_code()
+
+PYBIND11_MODULE(core, m)
+{
+    m.def(
+        "create_mesh",
+        &create_mesh,
+        pybind11::arg("xtex").noconvert(),
+        pybind11::arg("ytex").noconvert(),
+        pybind11::arg("ztex").noconvert(),
+        pybind11::arg("iso"),
+        pybind11::arg("adaptivity"));
+}
