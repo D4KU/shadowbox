@@ -99,17 +99,27 @@ class Shadowbox(bpy.types.Operator):
             and context.object \
             and context.object.type == 'MESH'
 
-    @staticmethod
-    def _on_depsgraph_update(scene, depsgraph):
+    @classmethod
+    def on_unregister(cls):
+        cls.dispose()
+
+    @classmethod
+    def dispose(cls):
+        if cls._handle:
+            cls._handle.dispose()
+            cls._handle = None
+        bpy.app.handlers.depsgraph_update_post.remove(
+            cls._on_depsgraph_update)
+
+    @classmethod
+    def _on_depsgraph_update(cls, scene, depsgraph):
         ctx = bpy.context
         if ctx.object and ctx.object.select_get() and ctx.mode == 'OBJECT':
             return
-
-        Shadowbox._handle.clear()
-        bpy.app.handlers.depsgraph_update_post.remove(
-            Shadowbox._on_depsgraph_update)
+        cls.dispose()
 
     def _init(self, context):
+        cls = type(self)
         try:
             ximg = bpy.data.images[self.xname]
             yimg = bpy.data.images[self.yname]
@@ -123,20 +133,19 @@ class Shadowbox(bpy.types.Operator):
             self.report({'ERROR'}, "No fitting shape")
             return False
 
-        if not self._handle:
-            Shadowbox._handle = ImageHandle()
-        self._handle.set_images(ximg, yimg, zimg)
-
         if (self.new_mesh):
-            context.objet.data = bpy.data.meshes.new(self._MESH_NAME)
+            context.object.data = bpy.data.meshes.new(self._MESH_NAME)
+
+        if not cls._handle:
+            cls._handle = ImageHandle(ximg, yimg, zimg)
 
         handler = bpy.app.handlers.depsgraph_update_post
-        if self._on_depsgraph_update not in handler:
-            handler.append(self._on_depsgraph_update)
+        if cls._on_depsgraph_update not in handler:
+            handler.append(cls._on_depsgraph_update)
 
-        Shadowbox._ximg = ximg
-        Shadowbox._yimg = yimg
-        Shadowbox._zimg = zimg
+        cls._ximg = ximg
+        cls._yimg = yimg
+        cls._zimg = zimg
         return True
 
     def execute(self, context):
@@ -163,17 +172,18 @@ class Shadowbox(bpy.types.Operator):
 
     def modal(self, context, event):
         if event.type == 'ESC':
-            Shadowbox._runs_modal = False
+            type(self)._runs_modal = False
             return {'FINISHED'}
         self._execute(context)
         return {'PASS_THROUGH'}
 
     def invoke(self, context, event):
+        cls = type(self)
         if self.run_modal:
-            if not self._runs_modal:
-                if not self._init(context):
+            if not cls._runs_modal:
+                if not cls._init(context):
                     return {'FINISHED'}
-                Shadowbox._runs_modal = True
+                cls._runs_modal = True
                 context.window_manager.modal_handler_add(self)
             return {'RUNNING_MODAL'}
         return self.execute(context)
