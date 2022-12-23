@@ -53,7 +53,7 @@ vdb::BoolGrid::Ptr get_vol_slice(
     return grid;
 }
 
-std::pair<Eigen::MatrixX3f, Eigen::MatrixX4i> create_mesh(
+auto create_mesh(
     const Eigen::Ref<const Eigen::MatrixXf>& xtex,
     const Eigen::Ref<const Eigen::MatrixXf>& ytex,
     const Eigen::Ref<const Eigen::MatrixXf>& ztex,
@@ -62,54 +62,76 @@ std::pair<Eigen::MatrixX3f, Eigen::MatrixX4i> create_mesh(
 {
     vdb::initialize();
     std::vector<vdb::Vec3s> points;
-    std::vector<vdb::Vec3I> tris;
     std::vector<vdb::Vec4I> quads;
+    std::vector<vdb::Vec3I> tris;
 
-    const int cores = std::max(std::thread::hardware_concurrency(), 1u);
-    auto futures = new std::future<vdb::BoolGrid::Ptr>[cores];
+    {
+        const int cores = std::max(std::thread::hardware_concurrency(), 1u);
+        auto futures = new std::future<vdb::BoolGrid::Ptr>[cores];
 
-    for (int i = 0; i < cores; ++i)
-        futures[i] = std::async(&get_vol_slice, xtex, ytex, ztex, i, cores, iso);
+        for (int i = 0; i < cores; ++i)
+            futures[i] = std::async(&get_vol_slice, xtex, ytex, ztex, i, cores, iso);
 
-    auto grid = futures[0].get();
-    for (int i = 1; i < cores; ++i)
-        grid->merge(*futures[i].get());
+        auto grid = futures[0].get();
+        for (int i = 1; i < cores; ++i)
+            grid->merge(*futures[i].get());
 
-    grid->tree().prune();
-    vdb::tools::volumeToMesh(*grid, points, tris, quads, .5, adaptivity);
-    Eigen::MatrixX3f verts(points.size(), 3);
-    Eigen::MatrixX4i faces(tris.size() + quads.size(), 4);
+        grid->tree().prune();
+        vdb::tools::volumeToMesh(*grid, points, tris, quads, .5, adaptivity);
+    }
+
+    const size_t psize = points.size();
+    const size_t qsize = quads.size();
+    const size_t tsize = tris.size();
+
+    Eigen::VectorXf verts(psize * 3);
+    Eigen::VectorXi faces(qsize * 4 + tsize * 3);
+    Eigen::VectorXi steps(qsize + tsize);
+    Eigen::VectorXi corners(qsize + tsize);
 
     const size_t xres = ytex.cols();
     const size_t yres = xtex.cols();
     const size_t zres = xtex.rows();
-    const float res = (float)std::max(std::max(xres, yres), zres);
+    const float res = 1 / (float)std::max(std::max(xres, yres), zres);
 
-    for (size_t i = 0; i < points.size(); ++i)
+    for (size_t i = 0; i < psize; ++i)
     {
-        verts(i, 0) = points[i][0] / res;
-        verts(i, 1) = points[i][1] / res;
-        verts(i, 2) = points[i][2] / res;
+        verts[i * 3    ] = points[i][0] * res;
+        verts[i * 3 + 1] = points[i][1] * res;
+        verts[i * 3 + 2] = points[i][2] * res;
     }
 
-    for (size_t i = 0; i < quads.size(); ++i)
+    for (size_t i = 0; i < qsize; ++i)
     {
-        faces(i, 0) = quads[i][0];
-        faces(i, 1) = quads[i][1];
-        faces(i, 2) = quads[i][2];
-        faces(i, 3) = quads[i][3];
+        faces[i * 4    ] = quads[i][0];
+        faces[i * 4 + 1] = quads[i][1];
+        faces[i * 4 + 2] = quads[i][2];
+        faces[i * 4 + 3] = quads[i][3];
     }
 
-    for (size_t i = 0; i < tris.size(); ++i)
+    for (size_t i = 0; i < tsize; ++i)
     {
-        const size_t j = i + quads.size();
-        faces(j, 0) = tris[i][0];
-        faces(j, 1) = tris[i][1];
-        faces(j, 2) = tris[i][2];
-        faces(j, 3) = tris[i][2];
+        const size_t j = qsize * 4 + i * 3;
+        faces[j    ] = tris[i][0];
+        faces[j + 1] = tris[i][1];
+        faces[j + 2] = tris[i][2];
     }
 
-    return std::make_pair(std::move(verts), std::move(faces));
+    for (size_t i = 0; i < qsize; ++i)
+        steps[i] = i * 4;
+    for (size_t i = 0; i < tsize; ++i)
+        steps[qsize + i] = qsize * 4 + i * 3;
+
+    for (size_t i = 0; i < qsize; ++i)
+        corners[i] = 4;
+    for (size_t i = 0; i < tsize; ++i)
+        corners[qsize + i] = 3;
+
+    return std::make_tuple(
+        std::move(verts),
+        std::move(faces),
+        std::move(steps),
+        std::move(corners));
 }
 
 PYBIND11_MODULE(core, m)

@@ -24,20 +24,32 @@ def _as_array(img):
     return np.asfortranarray(pxs[:, :, 0])
 
 
-def _set_geometry(mesh, verts, polys):
+def _set_geometry(mesh, verts, polys, loop_starts, loop_totals):
     mesh.clear_geometry()
-    mesh.vertices.add(len(verts))
-    mesh.vertices.foreach_set('co', verts.ravel())
+    mesh.vertices.add(6)
+    mesh.vertices.foreach_set('co', np.arange(len(mesh.vertices) * 3, dtype=np.float32))
 
-    mesh.loops.add(polys.size)
-    mesh.loops.foreach_set('vertex_index', polys.ravel())
+    mesh.loops.add(7)
+    mesh.loops.foreach_set('vertex_index', [0, 1, 2, 3, 3, 2, 4])
 
-    loop_start = np.arange(0, polys.size, polys.shape[1])
-    loop_total = np.repeat(polys.shape[1], len(polys))
+    mesh.polygons.add(2)
+    mesh.polygons.foreach_set('loop_start', [0, 4])
+    mesh.polygons.foreach_set('loop_total', [4, 3])
 
-    mesh.polygons.add(len(polys))
-    mesh.polygons.foreach_set('loop_start', loop_start)
-    mesh.polygons.foreach_set('loop_total', loop_total)
+    mesh.update()
+
+
+def _set_geometry2(mesh, verts, polys, loop_starts, loop_totals):
+    mesh.clear_geometry()
+    mesh.vertices.add(int(len(verts) / 3))
+    mesh.vertices.foreach_set('co', verts)
+
+    mesh.loops.add(len(polys))
+    mesh.loops.foreach_set('vertex_index', polys)
+
+    mesh.polygons.add(len(loop_starts))
+    mesh.polygons.foreach_set('loop_start', loop_starts)
+    mesh.polygons.foreach_set('loop_total', loop_totals)
 
     mesh.update()
 
@@ -166,7 +178,7 @@ class Shadowbox(bpy.types.Operator):
         print(t2-t1)
 
         t3 = time.time()
-        _set_geometry(context.object.data, *geo)
+        _set_geometry2(context.object.data, *geo)
         t4 = time.time()
         print(t4-t3)
 
