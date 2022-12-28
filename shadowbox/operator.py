@@ -26,21 +26,6 @@ def _as_array(img):
 
 def _set_geometry(mesh, verts, polys, loop_starts, loop_totals):
     mesh.clear_geometry()
-    mesh.vertices.add(6)
-    mesh.vertices.foreach_set('co', np.arange(len(mesh.vertices) * 3, dtype=np.float32))
-
-    mesh.loops.add(7)
-    mesh.loops.foreach_set('vertex_index', [0, 1, 2, 3, 3, 2, 4])
-
-    mesh.polygons.add(2)
-    mesh.polygons.foreach_set('loop_start', [0, 4])
-    mesh.polygons.foreach_set('loop_total', [4, 3])
-
-    mesh.update()
-
-
-def _set_geometry2(mesh, verts, polys, loop_starts, loop_totals):
-    mesh.clear_geometry()
     mesh.vertices.add(int(len(verts) / 3))
     mesh.vertices.foreach_set('co', verts)
 
@@ -175,11 +160,12 @@ class Shadowbox(bpy.types.Operator):
             self.adaptivity,
         )
         t2 = time.time()
-        print(t2-t1)
 
         t3 = time.time()
-        _set_geometry2(context.object.data, *geo)
+        _set_geometry(context.object.data, *geo)
         t4 = time.time()
+
+        print(t2-t1)
         print(t4-t3)
 
     def modal(self, context, event):
