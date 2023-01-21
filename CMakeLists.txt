@@ -1,8 +1,10 @@
-cmake_minimum_required(VERSION 3.15)
-project(shadowbox)
+cmake_minimum_required(VERSION 3.18)
+project(shadowbox LANGUAGES CXX)
+enable_language(CUDA)
 
 if(NOT "${CMAKE_CXX_STANDARD}")
   set(CMAKE_CXX_STANDARD 17)
+  set(CMAKE_CUDA_STANDARD 17)
 endif()
 
 if(MSVC)
@@ -20,12 +22,13 @@ find_package(pybind11 CONFIG REQUIRED)
 find_package(OpenVDB REQUIRED)
 
 pybind11_add_module(core
-    src/create_mesh.cpp
+    src/create_mesh.cu
     )
 
 set_target_properties(core PROPERTIES
     MSVC_RUNTIME_LIBRARY
     "MultiThreaded$<$<CONFIG:Debug>:Debug>$<$<NOT:$<BOOL:${OPENVDB_USE_STATIC_LIBS}>>:DLL>"
+    CUDA_SEPARABLE_COMPILATION ON
     )
 
 target_link_libraries(core PRIVATE Eigen3::Eigen)
