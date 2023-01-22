@@ -1,4 +1,3 @@
-import time
 import bpy
 import numpy as np
 from .image_handle import ImageHandle
@@ -6,7 +5,7 @@ import core
 
 
 def _gather_images(cls, context):
-    return [(i.name_full, i.name, i.filepath) for i in bpy.data.images]
+    return [(i.name_full, i.name, i.filepath) for i in bpy.data.images if not i.name_full.startswith('.')]
 
 
 def _debug_log(arr):
@@ -39,13 +38,27 @@ def _set_geometry(mesh, verts, polys, loop_starts, loop_totals):
     mesh.update()
 
 
+def _prep_img(name, *size):
+    imgs = bpy.data.images
+    copy_name = ".shadowbox_" + name
+
+    if copy_name in imgs:
+        copy = imgs[copy_name]
+    else:
+        copy = imgs[name].copy()
+        copy.name = copy_name
+
+    if copy.size[:] != size:
+        copy.scale(*size)
+    return copy
+
+
 class Shadowbox(bpy.types.Operator):
     bl_idname = "object.shadowbox"
     bl_label = "Shadowbox"
     bl_description = ""
     bl_options = {'REGISTER', 'UNDO'}
     menu = bpy.types.VIEW3D_MT_add
-    _MESH_NAME = "shadowbox"
     _handle = None
     _runs_modal = False
     _ximg = None
@@ -66,6 +79,14 @@ class Shadowbox(bpy.types.Operator):
         name="Image Z",
         items=_gather_images,
         default=4,
+    )
+    res: bpy.props.IntVectorProperty(
+        name="Resolution",
+        default=(256, 256, 256),
+        min=8,
+        max=2048,
+        soft_max=1024,
+        subtype='XYZ_LENGTH',
     )
     iso: bpy.props.FloatProperty(
         name="Iso Value",
@@ -98,51 +119,46 @@ class Shadowbox(bpy.types.Operator):
 
     @classmethod
     def on_unregister(cls):
-        cls.dispose()
+        cls.dispose_handle()
 
     @classmethod
-    def dispose(cls):
+    def dispose_handle(cls):
         if cls._handle:
             cls._handle.dispose()
             cls._handle = None
-        bpy.app.handlers.depsgraph_update_post.remove(
-            cls._on_depsgraph_update)
+        try:
+            bpy.app.handlers.depsgraph_update_post.remove(
+                cls._on_depsgraph_update)
+        except ValueError:
+            pass
 
     @classmethod
     def _on_depsgraph_update(cls, scene, depsgraph):
         ctx = bpy.context
         if ctx.object and ctx.object.select_get() and ctx.mode == 'OBJECT':
             return
-        cls.dispose()
+        cls.dispose_handle()
 
     def _init(self, context):
         cls = type(self)
-        try:
-            ximg = bpy.data.images[self.xname]
-            yimg = bpy.data.images[self.yname]
-            zimg = bpy.data.images[self.zname]
-        except KeyError:
-            return False
+        (xres, yres, zres) = self.res
 
-        if zimg.size[0] != yimg.size[0] or \
-           zimg.size[1] != ximg.size[0] or \
-           yimg.size[1] != ximg.size[1]:
-            self.report({'ERROR'}, "No fitting shape")
-            return False
+        try:
+            cls._ximg = _prep_img(self.xname, zres, yres)
+            cls._yimg = _prep_img(self.yname, xres, zres)
+            cls._zimg = _prep_img(self.zname, xres, yres)
+        except KeyError:
+            return None
 
         if (self.new_mesh):
-            context.object.data = bpy.data.meshes.new(self._MESH_NAME)
+            context.object.data = bpy.data.meshes.new("shadowbox")
 
-        if not cls._handle:
-            cls._handle = ImageHandle(ximg, yimg, zimg)
+        cls.dispose_handle()
+        cls._handle = ImageHandle(cls._ximg, cls._yimg, cls._zimg)
 
         handler = bpy.app.handlers.depsgraph_update_post
         if cls._on_depsgraph_update not in handler:
             handler.append(cls._on_depsgraph_update)
-
-        cls._ximg = ximg
-        cls._yimg = yimg
-        cls._zimg = zimg
         return True
 
     def execute(self, context):
@@ -151,7 +167,6 @@ class Shadowbox(bpy.types.Operator):
         return {'FINISHED'}
 
     def _execute(self, context):
-        t1 = time.time()
         geo = core.create_mesh(
             _as_array(self._ximg),
             _as_array(self._yimg),
@@ -159,14 +174,7 @@ class Shadowbox(bpy.types.Operator):
             self.iso,
             self.adaptivity,
         )
-        t2 = time.time()
-
-        t3 = time.time()
         _set_geometry(context.object.data, *geo)
-        t4 = time.time()
-
-        print(t2-t1)
-        print(t4-t3)
 
     def modal(self, context, event):
         if event.type == 'ESC':
