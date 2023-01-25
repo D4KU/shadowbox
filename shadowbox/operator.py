@@ -19,7 +19,7 @@ def _debug_log(arr):
 def _as_array(img):
     pxs = np.empty(len(img.pixels), dtype=np.float32, order='F')
     img.pixels.foreach_get(pxs)
-    pxs = pxs.reshape(img.size[0], img.size[1], -1)
+    pxs = pxs.reshape(img.size[1], img.size[0], -1)
     return np.asfortranarray(pxs[:, :, 0])
 
 
@@ -38,16 +38,15 @@ def _set_geometry(mesh, verts, polys, loop_starts, loop_totals):
     mesh.update()
 
 
-def _prep_img(name, *size):
+def _prep_img(name, postfix, *size):
     imgs = bpy.data.images
-    copy_name = ".shadowbox_" + name
+    copy_name = ".shadowbox_" + postfix
 
     if copy_name in imgs:
-        copy = imgs[copy_name]
-    else:
-        copy = imgs[name].copy()
-        copy.name = copy_name
+        imgs.remove(imgs[copy_name])
 
+    copy = imgs[name].copy()
+    copy.name = copy_name
     if copy.size[:] != size:
         copy.scale(*size)
     return copy
@@ -120,6 +119,7 @@ class Shadowbox(bpy.types.Operator):
     @classmethod
     def on_unregister(cls):
         cls.dispose_handle()
+        cls.dispose_imgs()
 
     @classmethod
     def dispose_handle(cls):
@@ -133,20 +133,29 @@ class Shadowbox(bpy.types.Operator):
             pass
 
     @classmethod
+    def dispose_imgs(cls):
+        if cls._ximg:
+            bpy.data.images.remove(cls._ximg)
+        if cls._yimg:
+            bpy.data.images.remove(cls._yimg)
+        if cls._zimg:
+            bpy.data.images.remove(cls._zimg)
+
+    @classmethod
     def _on_depsgraph_update(cls, scene, depsgraph):
         ctx = bpy.context
         if ctx.object and ctx.object.select_get() and ctx.mode == 'OBJECT':
             return
-        cls.dispose_handle()
+        cls.on_unregister()
 
     def _init(self, context):
         cls = type(self)
         (xres, yres, zres) = self.res
 
         try:
-            cls._ximg = _prep_img(self.xname, zres, yres)
-            cls._yimg = _prep_img(self.yname, xres, zres)
-            cls._zimg = _prep_img(self.zname, xres, yres)
+            cls._ximg = _prep_img(self.xname, "x", yres, zres)
+            cls._yimg = _prep_img(self.yname, "y", xres, zres)
+            cls._zimg = _prep_img(self.zname, "z", xres, yres)
         except KeyError:
             return None
 

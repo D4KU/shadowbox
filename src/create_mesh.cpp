@@ -30,9 +30,11 @@ vdb::BoolGrid::Ptr get_vol_slice(
     const int sliceCount,
     const float iso)
 {
-    const int xres = (int)ytex.cols();
-    const int yres = (int)xtex.cols();
-    const int zres = (int)xtex.rows();
+    // row count = image height
+    // col count = image width
+    const int xres = (int)ytex.cols(); // or ztex.cols
+    const int yres = (int)xtex.cols(); // or ztex.rows
+    const int zres = (int)xtex.rows(); // or ytex.rows
 
     const float sliceRes = xres / (float)sliceCount;
     const int xstart = (int)(sliceIdx * sliceRes);
@@ -89,16 +91,15 @@ auto create_mesh(
     Eigen::VectorXi steps(qsize + tsize);
     Eigen::VectorXi corners(qsize + tsize);
 
-    const size_t xres = ytex.cols();
-    const size_t yres = xtex.cols();
-    const size_t zres = xtex.rows();
-    const float res = 1 / (float)std::max(std::max(xres, yres), zres);
+    const float xres = 1.0f / ytex.cols();
+    const float yres = 1.0f / xtex.cols();
+    const float zres = 1.0f / xtex.rows();
 
     for (size_t i = 0; i < psize; ++i)
     {
-        verts[i * 3    ] = points[i][0] * res;
-        verts[i * 3 + 1] = points[i][1] * res;
-        verts[i * 3 + 2] = points[i][2] * res;
+        verts[i * 3    ] = points[i][0] * xres;
+        verts[i * 3 + 1] = points[i][1] * yres;
+        verts[i * 3 + 2] = points[i][2] * zres;
     }
 
     for (size_t i = 0; i < qsize; ++i)
