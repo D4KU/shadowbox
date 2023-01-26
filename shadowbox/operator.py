@@ -1,11 +1,16 @@
 import bpy
 import numpy as np
+from itertools import combinations
 from .image_handle import ImageHandle
 import core
 
 
 def _gather_images(cls, context):
-    return [(i.name_full, i.name, i.filepath) for i in bpy.data.images if not i.name_full.startswith('.')]
+    return [(i.name_full, i.name, i.filepath) \
+        for i in bpy.data.images \
+        if i.size[0] > 0 \
+            and i.size[1] > 0 \
+            and not i.name_full.startswith('.')]
 
 
 def _debug_log(arr):
@@ -16,11 +21,25 @@ def _debug_log(arr):
     f.close()
 
 
-def _as_array(img):
-    pxs = np.empty(len(img.pixels), dtype=np.float32, order='F')
-    img.pixels.foreach_get(pxs)
-    pxs = pxs.reshape(img.size[1], img.size[0], -1)
-    return np.asfortranarray(pxs[:, :, 0])
+def _as_array(img, size):
+    tmp = None
+    try:
+        if img.size[:] != size:
+            tmp = bpy.data.images.new(".shadowbox", *img.size)
+            pxs = np.empty(len(img.pixels), dtype=np.float32)
+            img.pixels.foreach_get(pxs)
+            tmp.pixels.foreach_set(pxs)
+            tmp.scale(*size)
+            img = tmp
+
+        pxs = np.empty(len(img.pixels), dtype=np.float32, order='F')
+        img.pixels.foreach_get(pxs)
+        pxs = pxs.reshape(*reversed(size), -1)
+        pxs = np.asfortranarray(pxs[:, :, 0])
+    finally:
+        if tmp:
+            bpy.data.images.remove(tmp)
+    return pxs
 
 
 def _set_geometry(mesh, verts, polys, loop_starts, loop_totals):
@@ -38,20 +57,6 @@ def _set_geometry(mesh, verts, polys, loop_starts, loop_totals):
     mesh.update()
 
 
-def _prep_img(name, postfix, *size):
-    imgs = bpy.data.images
-    copy_name = ".shadowbox_" + postfix
-
-    if copy_name in imgs:
-        imgs.remove(imgs[copy_name])
-
-    copy = imgs[name].copy()
-    copy.name = copy_name
-    if copy.size[:] != size:
-        copy.scale(*size)
-    return copy
-
-
 class Shadowbox(bpy.types.Operator):
     bl_idname = "object.shadowbox"
     bl_label = "Shadowbox"
@@ -60,29 +65,27 @@ class Shadowbox(bpy.types.Operator):
     menu = bpy.types.VIEW3D_MT_add
     _handle = None
     _runs_modal = False
-    _ximg = None
-    _yimg = None
-    _zimg = None
+    _imgs = None, None, None
 
     xname: bpy.props.EnumProperty(
         name="Image X",
         items=_gather_images,
-        default=2,
+        default=3,
     )
     yname: bpy.props.EnumProperty(
         name="Image Y",
         items=_gather_images,
-        default=3,
+        default=4,
     )
     zname: bpy.props.EnumProperty(
         name="Image Z",
         items=_gather_images,
-        default=4,
+        default=5,
     )
     res: bpy.props.IntVectorProperty(
         name="Resolution",
         default=(256, 256, 256),
-        min=8,
+        min=1,
         max=2048,
         soft_max=1024,
         subtype='XYZ_LENGTH',
@@ -118,28 +121,17 @@ class Shadowbox(bpy.types.Operator):
 
     @classmethod
     def on_unregister(cls):
-        cls.dispose_handle()
-        cls.dispose_imgs()
+        cls._dispose_handle()
+        func = cls._on_depsgraph_update
+        handler = bpy.app.handlers.depsgraph_update_post
+        if func in handler:
+            handler.remove(func)
 
     @classmethod
-    def dispose_handle(cls):
+    def _dispose_handle(cls):
         if cls._handle:
             cls._handle.dispose()
             cls._handle = None
-        try:
-            bpy.app.handlers.depsgraph_update_post.remove(
-                cls._on_depsgraph_update)
-        except ValueError:
-            pass
-
-    @classmethod
-    def dispose_imgs(cls):
-        if cls._ximg:
-            bpy.data.images.remove(cls._ximg)
-        if cls._yimg:
-            bpy.data.images.remove(cls._yimg)
-        if cls._zimg:
-            bpy.data.images.remove(cls._zimg)
 
     @classmethod
     def _on_depsgraph_update(cls, scene, depsgraph):
@@ -148,26 +140,25 @@ class Shadowbox(bpy.types.Operator):
             return
         cls.on_unregister()
 
+    def __del__(self):
+        type(self).on_unregister()
+
     def _init(self, context):
         cls = type(self)
-        (xres, yres, zres) = self.res
+        imgs = bpy.data.images
 
         try:
-            cls._ximg = _prep_img(self.xname, "x", yres, zres)
-            cls._yimg = _prep_img(self.yname, "y", xres, zres)
-            cls._zimg = _prep_img(self.zname, "z", xres, yres)
+            cls._imgs = imgs[self.xname], imgs[self.yname], imgs[self.zname]
         except KeyError:
-            return None
+            return False
 
         if (self.new_mesh):
             context.object.data = bpy.data.meshes.new("shadowbox")
 
-        cls.dispose_handle()
-        cls._handle = ImageHandle(cls._ximg, cls._yimg, cls._zimg)
-
+        func = cls._on_depsgraph_update
         handler = bpy.app.handlers.depsgraph_update_post
-        if cls._on_depsgraph_update not in handler:
-            handler.append(cls._on_depsgraph_update)
+        if func not in handler:
+            handler.append(func)
         return True
 
     def execute(self, context):
@@ -176,13 +167,13 @@ class Shadowbox(bpy.types.Operator):
         return {'FINISHED'}
 
     def _execute(self, context):
-        geo = core.create_mesh(
-            _as_array(self._ximg),
-            _as_array(self._yimg),
-            _as_array(self._zimg),
-            self.iso,
-            self.adaptivity,
-        )
+        cls = type(self)
+        cls._dispose_handle()
+        cls._handle = ImageHandle(*cls._imgs)
+
+        new_sizes = reversed(tuple(combinations(self.res, 2)))
+        imgs = map(_as_array, cls._imgs, new_sizes)
+        geo = core.create_mesh(*imgs, self.iso, self.adaptivity)
         _set_geometry(context.object.data, *geo)
 
     def modal(self, context, event):
