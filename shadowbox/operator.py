@@ -64,8 +64,9 @@ class Shadowbox(bpy.types.Operator):
         "Generate a mesh from 3 images describing its silhouette from "
         "each axis"
     )
-    bl_options = {'REGISTER', 'UNDO'}
+    bl_options = {'REGISTER', 'UNDO', 'PRESET'}
     menu = bpy.types.VIEW3D_MT_add
+    _last_obj = None
     _handle = None
     _runs_modal = False
     _imgs = None, None, None
@@ -137,13 +138,27 @@ class Shadowbox(bpy.types.Operator):
 
     @classmethod
     def poll(cls, context):
-        return context.mode == 'OBJECT' \
-            and context.object \
-            and context.object.type == 'MESH'
+        if context.mode != 'OBJECT':
+            cls.poll_message_set("Not in object mode")
+            return False
+        if not context.object:
+            cls.poll_message_set("No active object")
+            return False
+        if not context.object.select_get():
+            cls.poll_message_set("Active object not selected")
+            return False
+        if context.object.type != 'MESH':
+            cls.poll_message_set("Active object not a mesh")
+            return False
+        return True
 
     @classmethod
     def on_unregister(cls):
         cls._dispose_handle()
+        cls._last_obj = None
+        cls._runs_modal = False
+        cls._imgs = None, None, None
+        cls._last_obj = None
         func = cls._on_depsgraph_update
         handler = bpy.app.handlers.depsgraph_update_post
         if func in handler:
@@ -158,7 +173,8 @@ class Shadowbox(bpy.types.Operator):
     @classmethod
     def _on_depsgraph_update(cls, scene, depsgraph):
         ctx = bpy.context
-        if ctx.object and ctx.object.select_get() and ctx.mode == 'OBJECT':
+        ob = ctx.object
+        if ob and ob.select_get() and ctx.mode == 'OBJECT' and cls._last_obj is ob:
             return
         cls.on_unregister()
 
@@ -181,12 +197,9 @@ class Shadowbox(bpy.types.Operator):
         handler = bpy.app.handlers.depsgraph_update_post
         if func not in handler:
             handler.append(func)
-        return True
 
-    def execute(self, context):
-        if self._init(context):
-            self._execute(context)
-        return {'FINISHED'}
+        cls._last_obj = context.object
+        return True
 
     def _execute(self, context):
         cls = type(self)
@@ -197,6 +210,11 @@ class Shadowbox(bpy.types.Operator):
         imgs = map(_as_array, cls._imgs, new_sizes)
         geo = core.create_mesh(*imgs, self.iso, self.adaptivity)
         _set_geometry(context.object.data, *geo)
+
+    def execute(self, context):
+        if self._init(context):
+            self._execute(context)
+        return {'FINISHED'}
 
     def modal(self, context, event):
         if event.type == 'ESC':
