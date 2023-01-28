@@ -60,7 +60,10 @@ def _set_geometry(mesh, verts, polys, loop_starts, loop_totals):
 class Shadowbox(bpy.types.Operator):
     bl_idname = "object.shadowbox"
     bl_label = "Shadowbox"
-    bl_description = ""
+    bl_description = (
+        "Generate a mesh from 3 images describing its silhouette from "
+        "each axis"
+    )
     bl_options = {'REGISTER', 'UNDO'}
     menu = bpy.types.VIEW3D_MT_add
     _handle = None
@@ -69,47 +72,66 @@ class Shadowbox(bpy.types.Operator):
 
     xname: bpy.props.EnumProperty(
         name="Image X",
+        description="Image describing the silhouette along the x-axis",
         items=_gather_images,
-        default=3,
+        default=0,
     )
     yname: bpy.props.EnumProperty(
         name="Image Y",
+        description="Image describing the silhouette along the y-axis",
         items=_gather_images,
-        default=4,
+        default=1,
     )
     zname: bpy.props.EnumProperty(
         name="Image Z",
+        description="Image describing the silhouette along the z-axis",
         items=_gather_images,
-        default=5,
+        default=2,
     )
     res: bpy.props.IntVectorProperty(
         name="Resolution",
+        description="Loop cut count of the generated mesh on each axis",
         default=(256, 256, 256),
         min=1,
         max=2048,
-        soft_max=1024,
+        soft_max=512,
         subtype='XYZ_LENGTH',
     )
     iso: bpy.props.FloatProperty(
         name="Iso Value",
+        description=(
+            "Pixels brighter than this value are considered part of "
+            "the silhouette, pixels darker part of the background"
+        ),
+        default=0.5,
         min=0,
         max=1,
         step=2,
-        default=0.5,
     )
     adaptivity: bpy.props.FloatProperty(
         name="Adaptivity",
+        description="Higher values merge more vertices close together",
+        default=1,
         min=0,
         max=1,
         step=2,
-        default=1,
     )
     run_modal: bpy.props.BoolProperty(
-        name="Modal",
+        name="Run in background",
+        description=(
+            "If on, the mesh is regenerated every frame until the "
+            "ESCAPE key is pressed. Useful to update the mesh while "
+            "drawing into images"
+        ),
         default=False,
     )
     new_mesh: bpy.props.BoolProperty(
         name="Assign New Mesh",
+        description=(
+            "If on, a new mesh is created and assigned to the active "
+            "object. If off, the mesh of the last execution is reused "
+            "and its data overwritten"
+        ),
         default=False,
     )
 
@@ -187,7 +209,7 @@ class Shadowbox(bpy.types.Operator):
         cls = type(self)
         if self.run_modal:
             if not cls._runs_modal:
-                if not cls._init(context):
+                if not self._init(context):
                     return {'FINISHED'}
                 cls._runs_modal = True
                 context.window_manager.modal_handler_add(self)

@@ -1,6 +1,10 @@
 bl_info = {
     "name": "Shadowbox",
-    "blender": (3, 0, 1),
+    "description": (
+        "Generate a mesh from 3 images describing its silhouette from "
+        "each axis"
+    ),
+    "blender": (3, 3, 0),
     "category": "Mesh",
 }
 
