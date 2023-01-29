@@ -23,16 +23,15 @@ else:
     from . import operator
 
 
-classes = (
-    operator.Shadowbox,
-)
+def _call_globals(attr_name):
+    for m in globals().values():
+        if hasattr(m, attr_name):
+            getattr(m, attr_name)()
 
 
 def register():
-    for cls in classes:
-        bpy.utils.register_class(cls)
+    _call_globals("register")
 
 
 def unregister():
-    for cls in classes:
-        bpy.utils.unregister_class(cls)
+    _call_globals("unregister")

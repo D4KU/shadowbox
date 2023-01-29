@@ -2,7 +2,11 @@ import bpy
 import numpy as np
 from itertools import combinations
 from .image_handle import ImageHandle
+from .register import register
 import core
+
+
+_DEFAULT_NAME = "Shadowbox"
 
 
 def _gather_images(cls, context):
@@ -25,7 +29,7 @@ def _as_array(img, size):
     tmp = None
     try:
         if img.size[:] != size:
-            tmp = bpy.data.images.new(".shadowbox", *img.size)
+            tmp = bpy.data.images.new("." + _DEFAULT_NAME, *img.size)
             pxs = np.empty(len(img.pixels), dtype=np.float32)
             img.pixels.foreach_get(pxs)
             tmp.pixels.foreach_set(pxs)
@@ -57,16 +61,16 @@ def _set_geometry(mesh, verts, polys, loop_starts, loop_totals):
     mesh.update()
 
 
+@register(bpy.types.VIEW3D_MT_add)
 class Shadowbox(bpy.types.Operator):
     bl_idname = "object.shadowbox"
-    bl_label = "Shadowbox"
+    bl_label = _DEFAULT_NAME
     bl_description = (
         "Generate a mesh from 3 images describing its silhouette from "
         "each axis"
     )
     bl_options = {'REGISTER', 'UNDO', 'PRESET'}
-    menu = bpy.types.VIEW3D_MT_add
-    _last_obj = None
+    _obj = None
     _handle = None
     _runs_modal = False
     _imgs = None, None, None
@@ -126,39 +130,21 @@ class Shadowbox(bpy.types.Operator):
         ),
         default=False,
     )
-    new_mesh: bpy.props.BoolProperty(
-        name="Assign New Mesh",
-        description=(
-            "If on, a new mesh is created and assigned to the active "
-            "object. If off, the mesh of the last execution is reused "
-            "and its data overwritten"
-        ),
-        default=False,
-    )
 
     @classmethod
     def poll(cls, context):
         if context.mode != 'OBJECT':
             cls.poll_message_set("Not in object mode")
             return False
-        if not context.object:
-            cls.poll_message_set("No active object")
-            return False
-        if not context.object.select_get():
-            cls.poll_message_set("Active object not selected")
-            return False
-        if context.object.type != 'MESH':
-            cls.poll_message_set("Active object not a mesh")
-            return False
         return True
 
     @classmethod
     def on_unregister(cls):
         cls._dispose_handle()
-        cls._last_obj = None
+        cls._obj = None
         cls._runs_modal = False
         cls._imgs = None, None, None
-        cls._last_obj = None
+        cls._obj = None
         func = cls._on_depsgraph_update
         handler = bpy.app.handlers.depsgraph_update_post
         if func in handler:
@@ -174,7 +160,7 @@ class Shadowbox(bpy.types.Operator):
     def _on_depsgraph_update(cls, scene, depsgraph):
         ctx = bpy.context
         ob = ctx.object
-        if ob and ob.select_get() and ctx.mode == 'OBJECT' and cls._last_obj is ob:
+        if ob and ob.select_get() and ctx.mode == 'OBJECT' and cls._obj is ob:
             return
         cls.on_unregister()
 
@@ -190,15 +176,20 @@ class Shadowbox(bpy.types.Operator):
         except KeyError:
             return False
 
-        if (self.new_mesh):
-            context.object.data = bpy.data.meshes.new("shadowbox")
+        ob = context.object
+        if not ob or not ob.select_get() or ob.type != 'MESH':
+            mesh = bpy.data.meshes.new(_DEFAULT_NAME)
+            ob = bpy.data.objects.new(_DEFAULT_NAME, mesh)
+            context.collection.objects.link(ob)
+            context.view_layer.objects.active = ob
+            ob.select_set(True)
 
         func = cls._on_depsgraph_update
         handler = bpy.app.handlers.depsgraph_update_post
         if func not in handler:
             handler.append(func)
 
-        cls._last_obj = context.object
+        cls._obj = ob
         return True
 
     def _execute(self, context):
@@ -209,7 +200,7 @@ class Shadowbox(bpy.types.Operator):
         new_sizes = reversed(tuple(combinations(self.res, 2)))
         imgs = map(_as_array, cls._imgs, new_sizes)
         geo = core.create_mesh(*imgs, self.iso, self.adaptivity)
-        _set_geometry(context.object.data, *geo)
+        _set_geometry(cls._obj.data, *geo)
 
     def execute(self, context):
         if self._init(context):
