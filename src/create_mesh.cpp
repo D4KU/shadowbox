@@ -91,15 +91,22 @@ auto create_mesh(
     Eigen::VectorXi steps(qsize + tsize);
     Eigen::VectorXi corners(qsize + tsize);
 
-    const float xres = 1.0f / ytex.cols();
-    const float yres = 1.0f / xtex.cols();
-    const float zres = 1.0f / xtex.rows();
+    // Voxel size in each direction
+    const float xvs = 1.0f / ytex.cols();
+    const float yvs = 1.0f / xtex.cols();
+    const float zvs = 1.0f / xtex.rows();
+
+    // Move whole mesh by half a voxel so that its origin is not in the
+    // center of the first voxel, but its frontal lower left corner
+    const float xoff = xvs * .5f;
+    const float yoff = yvs * .5f;
+    const float zoff = zvs * .5f;
 
     for (size_t i = 0; i < psize; ++i)
     {
-        verts[i * 3    ] = points[i][0] * xres;
-        verts[i * 3 + 1] = points[i][1] * yres;
-        verts[i * 3 + 2] = points[i][2] * zres;
+        verts[i * 3    ] = points[i][0] * xvs + xoff;
+        verts[i * 3 + 1] = points[i][1] * yvs + yoff;
+        verts[i * 3 + 2] = points[i][2] * zvs + zoff;
     }
 
     for (size_t i = 0; i < qsize; ++i)
