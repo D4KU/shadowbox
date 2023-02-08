@@ -7,12 +7,11 @@ endif()
 
 if(MSVC)
     option(OPENVDB_USE_STATIC_LIBS "" ON)
-    list(APPEND CMAKE_MODULE_PATH "C:/Program Files/OpenVDB/lib/cmake/OpenVDB")
-    set(pybind11_DIR "C:/Program Files/Python310/Lib/site-packages/pybind11/share/cmake/pybind11")
+    file(TO_CMAKE_PATH "$ENV{ProgramFiles}" PROGRAM_FILES)
+    list(APPEND CMAKE_MODULE_PATH "${PROGRAM_FILES}/OpenVDB/lib/cmake/OpenVDB")
 else()
     set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
     list(APPEND CMAKE_MODULE_PATH "/usr/lib/x86_64-linux-gnu/cmake/OpenVDB")
-    set(pybind11_DIR "/home/david/.local/lib/python3.10/site-packages/pybind11/share/cmake/pybind11")
 endif()
 
 find_package(Eigen3 CONFIG REQUIRED)
@@ -27,6 +26,10 @@ set_target_properties(core PROPERTIES
     MSVC_RUNTIME_LIBRARY
     "MultiThreaded$<$<CONFIG:Debug>:Debug>$<$<NOT:$<BOOL:${OPENVDB_USE_STATIC_LIBS}>>:DLL>"
     )
+
+if(MSVC)
+    set_target_properties(core PROPERTIES SUFFIX ".pyd")
+endif()
 
 target_link_libraries(core PRIVATE Eigen3::Eigen)
 target_link_libraries(core PRIVATE OpenVDB::openvdb)

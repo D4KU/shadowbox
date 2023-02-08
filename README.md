@@ -53,12 +53,13 @@ It is recommended to install dependencies with
 `C:/vcpkg`, execute the following commands where you want to build Shadowbox:
 
 ```
-C:/vcpkg/vcpkg install openvdb pybind11 eigen3 --triplet=x64-windows-static
+C:/vcpkg/vcpkg install eigen3 openvdb --triplet=x64-windows-static
+C:/vcpkg/vcpkg install pybind11 --triplet=x64-windows
 git clone https://github.com/D4KU/shadowbox.git
 cd shadowbox
 mkdir build
 cd build
-cmake .. -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake -DVCPKG_TARGET_TRIPLET=x64-windows-static
+cmake .. -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake -DVCPKG_TARGET_TRIPLET=x64-windows-static -Dpybind11_DIR=C:/vcpkg/installed/x64-windows/share/pybind11
 cmake --build . --config Release
 ```
 
