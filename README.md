@@ -32,19 +32,40 @@ Download the archive from the `Releases` page. Inside Blender, navigate to
 `Edit > Preferences > Add-ons` and click the `Install` button. Choose the
 downloaded archive and confirm.
 
-# Building from source
+Under Linux you also have to install
+[tbb](https://github.com/oneapi-src/oneTBB) as thread scheduler. For example
+under Ubuntu: `sudo apt-get install libtbb12`.
 
-For optimal performance this add-on uses a custom Python module written in
-C++ which has to be compiled for the Python version the targeted Blender
-version ships with. It also depends on the following libraries:
+# Build instructions
 
+For optimal performance this add-on uses a custom Python module written in C++
+which has to be compiled for the Python version the targeted Blender version
+ships with. [CMake](https://github.com/Kitware/CMake) is used to unify the
+build process regardless of your operating system, but the way you install
+dependencies varies. The module has the following dependencies:
 * [openVDB](https://github.com/AcademySoftwareFoundation/openvdb)
 * [pybind11](https://github.com/pybind/pybind11)
 * [eigen3](https://eigen.tuxfamily.org)
 
-[CMake](https://github.com/Kitware/CMake) is used to unify the build process
-regardless of your operating system, but the way you install dependencies
-varies.
+Follow the instructions under [Windows](#windows) or [Linux](#ubuntu-linux) depending
+on your operating system. The end product is a file with the extension `.pyd`
+under Windows and `.so` under Linux. 
+
+* Copy it **into** the [shadowbox](https://github.com/D4KU/shadowbox/tree/main/shadowbox) directory at the root of this repository
+* Copy that directory into [Blender's add-on directory](#finding-blenders-add-on-directory)
+* In Blender, navigate to `Edit > Preferences > Add-ons`
+* Hit the *Refresh* button
+* Search for the add-on and tick it in the list
+
+### Finding Blender's add-on directory
+For Blender version 3.4:
+* Windows: `%APPDATA%/Blender Foundation/Blender/3.4/scripts/addons`
+* Ubuntu: `~/.config/blender/3.4/scripts/addons`
+
+If still unsure:
+* Press *Shift + F4* inside Blender to open the Python console
+* Execute `bpy.utils.user_resource('SCRIPTS', path="addons")` to see the path
+
 
 ## Windows
 
@@ -53,8 +74,8 @@ It is recommended to install dependencies with
 `C:/vcpkg`, execute the following commands where you want to build Shadowbox:
 
 ```
-C:/vcpkg/vcpkg install eigen3 openvdb --triplet=x64-windows-static
-C:/vcpkg/vcpkg install pybind11 --triplet=x64-windows
+vcpkg install eigen3 openvdb --triplet=x64-windows-static
+vcpkg install pybind11 --triplet=x64-windows
 git clone https://github.com/D4KU/shadowbox.git
 cd shadowbox
 mkdir build
@@ -63,16 +84,7 @@ cmake .. -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake -DVCPK
 cmake --build . --config Release
 ```
 
-The end product is a `.pyd` file which you have to copy next to the Python
-scripts into the `shadowbox` directory at the root of this repository: `copy
-Release/*.pyd ../shadowbox`
-
-Next, copy that directory to Blender's add-on directory. For Blender version
-3.4 this would be: `%APPDATA%/Blender Foundation/Blender/3.4/scripts/addons`.
-Lastly you follow the steps outlined under [Installation](#installation), but
-select the `__init__.py` file instead of the archive.
-
-### Building openvdb
+### Building OpenVDB
 Because the static OpenVDB build from vcpkg seems to be [broken](https://github.com/microsoft/vcpkg/issues/26993), I had to compile OpenVDB from source as well. This may be resolved in the future. In case that happens to you, here are my build instructions. The last command for the installation you have to execute on a command line with admin rights.
 ```
 vcpkg install boost tbb --triplet=x64-windows-static
@@ -84,4 +96,28 @@ cmake .. -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake -DVCPK
 cmake --build . --config Release --target install
 ```
 
-Lastly, you may have to rename `libopenvdb.lib` in the installation directory to `openvdb.lib`.
+Before proceeding to build Shadowbox I had to rename `libopenvdb.lib` in the
+installation directory to `openvdb.lib`.
+
+
+## Ubuntu Linux
+```
+sudo apt-get install libeigen3-dev pybind11-dev libopenvdb-dev
+git clone https://github.com/D4KU/shadowbox.git
+cd shadowbox
+mkdir build
+cd build
+cmake ..
+cmake --build . --config Release
+```
+
+### Building OpenVDB
+```
+sudo apt-get install libboost-iostreams-dev libtbb-dev
+git clone https://github.com/AcademySoftwareFoundation/openvdb
+cd openvdb
+mkdir build
+cd build
+cmake .. -DUSE_BLOSC=OFF -DUSE_ZLIB=OFF -DOPENVDB_CORE_SHARED=OFF -DCMAKE_POSITION_INDEPENDENT_CODE=ON
+sudo cmake --build . --config Release --target install
+```
