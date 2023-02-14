@@ -3,6 +3,8 @@
 This is a [Blender](https://github.com/blender/blender) add-on to generate a
 mesh from 3 images describing its silhouette from each axis.
 
+![](https://github.com/D4KU/shadowbox/blob/main/media/cover.gif)
+
 # How to use
 
 Load the images you want to generate a mesh from into your project. Clear your
@@ -25,6 +27,8 @@ mesh.
 This is especially useful when you use the *Run in background* option, which
 regenerates the mesh every frame while you can paint into the images from
 inside Blender's Image Editor. Stop the automatic update by pressing *Escape*.
+
+![](https://github.com/D4KU/shadowbox/blob/main/media/paint.gif)
 
 # Installation
 
