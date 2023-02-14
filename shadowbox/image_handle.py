@@ -54,7 +54,7 @@ class ImageHandle:
         self.dispose()
 
     def dispose(self):
-        if self._handle:
+        if getattr(self, '_handle', None):
             bpy.types.SpaceView3D.draw_handler_remove(self._handle, 'WINDOW')
             self._handle = None
 

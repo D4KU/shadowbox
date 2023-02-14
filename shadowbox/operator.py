@@ -208,8 +208,9 @@ class Shadowbox(bpy.types.Operator):
         return {'FINISHED'}
 
     def modal(self, context, event):
-        if event.type == 'ESC':
-            type(self)._runs_modal = False
+        cls = type(self)
+        if not cls._runs_modal or event.type == 'ESC':
+            cls._runs_modal = False
             return {'FINISHED'}
         self._execute(context)
         return {'PASS_THROUGH'}
