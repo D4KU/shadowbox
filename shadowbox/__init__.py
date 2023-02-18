@@ -4,8 +4,10 @@ bl_info = {
         "Generate a mesh from 3 images describing its silhouette from "
         "each axis"
     ),
+    "version": (1, 0, 0),
     "blender": (3, 3, 0),
     "category": "Mesh",
+    "doc_url": "https://github.com/D4KU/shadowbox",
 }
 
 import os
